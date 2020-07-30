@@ -1,7 +1,7 @@
 doc
 Meta
 ^.*\.Rproj$
-^\.Rproj\.user$
+.Rproj.user
 .DS_Store
 .Rhistory
 .git
