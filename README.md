@@ -20,3 +20,5 @@ The edgefinder package depends on the 'Matrix' package, to allow for efficient
 storage and computation of large co-occurrence matrices. For simulating datasets
 we used the 'huge' and 'MASS' packages, but they are not required when
 using edgefinder.
+
+See vignettes/edgefinder.md for details.
