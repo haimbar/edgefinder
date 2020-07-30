@@ -1,0 +1,32 @@
+
+Used the ACES data from
+Allahyar A, Ubels J, de Ridder J (2019) A data-driven interactome of synergistic genes
+improves network-based cancer outcome prediction. PLoS Comput Biol 15(2): e1006657.
+https://doi.org/10.1371/journal.pcbi.1006657
+
+Data available from
+https://github.com/UMCUGenetics/SyNet/
+Executed
+https://github.com/UMCUGenetics/SyNet/blob/master/Gene_Expression_Datasets/ACES/S01_Collect_Data.m
+to obtain the ACES database, which contains 12 data sets, with G=12750, n=1616
+
+The original data are obtained via
+wget http://ccb.nki.nl/software/aces/ACES.tar.gz
+tar -xvzf ACES.tar.gz
+
+Then, we run the matlab code (on UConn's SkyDrive), which includes some steps in Python.
+Note that it required using Python 2.7
+
+I created ACES.RData with a gene expression matrix called GE, and a data frame called
+patdat with patient data; and also genenames.RData with the 12750 Entrez IDs.
+
+Then, I ran ACESnetwork.R with fdrlvl=0.01, and sampled 80 from each subtype (Normal,
+Her2, LumA, LumB, and Basal.)
+See https://www.mayoclinic.org/diseases-conditions/breast-cancer/in-depth/breast-cancer/art-20045654
+for details.
+All genes were included. This created the files ResultsSUBTYPE_001.RData
+
+Post processing and analysis was done with ACES_analysis.R
+
+
+

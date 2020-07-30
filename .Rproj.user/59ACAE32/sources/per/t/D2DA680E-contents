@@ -1,0 +1,153 @@
+source("~/edgefinder.R")
+#load("ACES.RData")
+load("genenames.RData")
+library("curl")
+library("jsonlite")
+#dim(GE)
+#genenames <- colnames(GE)
+#rm(GE)
+load("ResultsNormal_001.RData")
+SresN <- Sres
+load("ResultsHer2_001.RData")
+SresH <- Sres
+load("ResultsLumA_001.RData")
+SresLA <- Sres
+load("ResultsLumB_001.RData")
+SresLB <- Sres
+load("ResultsBasal_001.RData")
+SresB <- Sres
+
+plotDegCC(SresN)
+plotDegCC(SresB)
+plotDegCC(SresH)
+plotDegCC(SresLB)
+plotDegCC(SresLA)
+
+plotBitmapCC(SresN$AdjMat, orderByDegree = TRUE, showMinDegree = 10)
+plotBitmapCC(SresB$AdjMat, orderByDegree = TRUE, showMinDegree = 10)
+plotBitmapCC(SresH$AdjMat, orderByDegree = TRUE, showMinDegree = 10)
+plotBitmapCC(SresLB$AdjMat, orderByDegree = TRUE, showMinDegree = 10)
+plotBitmapCC(SresLA$AdjMat, orderByDegree = TRUE, showMinDegree = 10)
+
+Her2Nodes <- exportNodeInfo(SresH$AdjMat)
+cl2 <- which(Her2Nodes$Cluster == 2)
+cl4 <- which(Her2Nodes$Cluster == 4)
+cl5 <- which(Her2Nodes$Cluster == 5)
+cl6 <- which(Her2Nodes$Cluster == 6)
+
+
+plotDegCC(SresH, highlightNodes = cl2)
+plotDegCC(SresH, highlightNodes = cl5)
+plotDegCC(SresH, highlightNodes = cl6)
+
+CL2 = Her2Nodes[cl2,]
+CL5 = Her2Nodes[cl5,]
+CL6 = Her2Nodes[cl6,]
+
+tail(CL2[order(CL2$Degree),],30)
+tail(CL6[order(CL6$Degree),],30)
+
+plot(CL2$Degree,CL2$DegreeNIC)
+plot(CL5$Degree,CL5$DegreeNIC)
+plot(CL6$Degree,CL6$DegreeNIC)
+
+plot(CL2$Degree,CL2$CC,ylim=c(0,1))
+plot(CL5$Degree,CL5$CC,ylim=c(0,1))
+plot(CL6$Degree,CL6$CC,ylim=c(0,1))
+
+geneIDs2 <- genenames[as.numeric(rownames(CL2[order(CL2$Degree),]))] # 415 (lymph?)
+geneIDs6 <- genenames[as.numeric(rownames(CL6[order(CL6$Degree),]))] # 200 (placenta, ovary, endometrium)
+
+URLtemplate <- "https://www.ncbi.nlm.nih.gov/gene/ENTREZID/?report=expression"
+# e.g. https://www.ncbi.nlm.nih.gov/gene/1088/?report=expression
+# extract var tissues_data = {...}
+
+sink(file = "URLs2.txt")
+for (i in 1:length(geneIDs2)) {
+  geneID <- gsub("Entrez_","",geneIDs2[i])
+  URLtmp <- gsub("ENTREZID",geneID, URLtemplate)
+  cat(URLtmp,"\n")
+  #  cat("wget ",URLtmp,"|grep \"var tissues_data\"\n")
+}
+sink()
+
+sink(file = "URLs6.txt")
+for (i in 1:length(geneIDs6)) {
+  geneID <- gsub("Entrez_","",geneIDs6[i])
+  URLtmp <- gsub("ENTREZID",geneID, URLtemplate)
+  cat(URLtmp,"\n")
+  #  cat("wget ",URLtmp,"|grep \"var tissues_data\"\n")
+}
+sink()
+
+# wget -i URLs2.txt  -O GenesCluster2
+# grep "tissues_data" GenesCluster2 > GenesCluster2.tissues
+# wget -i URLs6.txt  -O GenesCluster6
+# grep "tissues_data" GenesCluster6 > GenesCluster6.tissues
+#
+# var tissues_data = {'adrenal': {'id': '5613_adrenal_PRJEB4337', 'gene': 5613, 'source_name': 'adrenal', 'full_rpkm': 0.903184, 'exp_rpkm': 0.903, 'var': 0.02526453, 'project_desc': 'PRJEB4337', '_version_': 1620403309341835266}, 'appendix': {'id': '5613_appendix_PRJEB4337', 'gene': 5613, 'source_name': 'appendix', 'full_rpkm': 6.08874, 'exp_rpkm': 6.09, 'var': 0.799857, 'project_desc': 'PRJEB4337', '_version_': 1620403309341835267}, 'bone marrow': {'id': '5613_bone marrow_PRJEB4337', 'gene': 5613, 'source_name': 'bone marrow', 'full_rpkm': 3.09866, 'exp_rpkm': 3.1, 'var': 1.632732, 'project_desc': 'PRJEB4337', '_version_': 1620403309341835268}, 'brain': {'id': '5613_brain_PRJEB4337', 'gene': 5613, 'source_name': 'brain', 'full_rpkm': 2.9376, 'exp_rpkm': 2.94, 'var': 5.34003, 'project_desc': 'PRJEB4337', '_version_': 1620403309341835269}, 'colon': {'id': '5613_colon_PRJEB4337', 'gene': 5613, 'source_name': 'colon', 'full_rpkm': 5.00289, 'exp_rpkm': 5.0, 'var': 4.766245, 'project_desc': 'PRJEB4337', '_version_': 1620403309341835270}, 'duodenum': {'id': '5613_duodenum_PRJEB4337', 'gene': 5613, 'source_name': 'duodenum', 'full_rpkm': 2.59066, 'exp_rpkm': 2.59, 'var': 0.389364, 'project_desc': 'PRJEB4337', '_version_': 1620403309341835271}, 'endometrium': {'id': '5613_endometrium_PRJEB4337', 'gene': 5613, 'source_name': 'endometrium', 'full_rpkm': 3.00588, 'exp_rpkm': 3.01, 'var': 0.443391, 'project_desc': 'PRJEB4337', '_version_': 1620403309341835272}, 'esophagus': {'id': '5613_esophagus_PRJEB4337', 'gene': 5613, 'source_name': 'esophagus', 'full_rpkm': 6.04169, 'exp_rpkm': 6.04, 'var': 1.539765, 'project_desc': 'PRJEB4337', '_version_': 1620403309341835273}, 'fat': {'id': '5613_fat_PRJEB4337', 'gene': 5613, 'source_name': 'fat', 'full_rpkm': 2.99678, 'exp_rpkm': 3.0, 'var': 0.1530957, 'project_desc': 'PRJEB4337', '_version_': 1620403309341835274}, 'gall bladder': {'id': '5613_gall bladder_PRJEB4337', 'gene': 5613, 'source_name': 'gall bladder', 'full_rpkm': 3.16368, 'exp_rpkm': 3.16, 'var': 0.762264, 'project_desc': 'PRJEB4337', '_version_': 1620403309341835275}, 'heart': {'id': '5613_heart_PRJEB4337', 'gene': 5613, 'source_name': 'heart', 'full_rpkm': 0.938249, 'exp_rpkm': 0.938, 'var': 0.0765732, 'project_desc': 'PRJEB4337', '_version_': 1620403309341835276}, 'kidney': {'id': '5613_kidney_PRJEB4337', 'gene': 5613, 'source_name': 'kidney', 'full_rpkm': 7.2615, 'exp_rpkm': 7.26, 'var': 35.78764, 'project_desc': 'PRJEB4337', '_version_': 1620403309341835277}, 'liver': {'id': '5613_liver_PRJEB4337', 'gene': 5613, 'source_name': 'liver', 'full_rpkm': 0.580494, 'exp_rpkm': 0.58, 'var': 0.00538803, 'project_desc': 'PRJEB4337', '_version_': 1620403309341835278}, 'lung': {'id': '5613_lung_PRJEB4337', 'gene': 5613, 'source_name': 'lung', 'full_rpkm': 4.0049, 'exp_rpkm': 4.0, 'var': 0.267662, 'project_desc': 'PRJEB4337', '_version_': 1620403309341835279}, 'lymph node': {'id': '5613_lymph node_PRJEB4337', 'gene': 5613, 'source_name': 'lymph node', 'full_rpkm': 6.96668, 'exp_rpkm': 6.97, 'var': 4.148825, 'project_desc': 'PRJEB4337', '_version_': 1620403309341835280}, 'ovary': {'id': '5613_ovary_PRJEB4337', 'gene': 5613, 'source_name': 'ovary', 'full_rpkm': 1.35511, 'exp_rpkm': 1.36, 'var': 0.0706074, 'project_desc': 'PRJEB4337', '_version_': 1620403309341835281}, 'pancreas': {'id': '5613_pancreas_PRJEB4337', 'gene': 5613, 'source_name': 'pancreas', 'full_rpkm': 0.577169, 'exp_rpkm': 0.577, 'var': 0.00141569, 'project_desc': 'PRJEB4337', '_version_': 1620403309341835282}, 'placenta': {'id': '5613_placenta_PRJEB4337', 'gene': 5613, 'source_name': 'placenta', 'full_rpkm': 3.26101, 'exp_rpkm': 3.26, 'var': 2.03578, 'project_desc': 'PRJEB4337', '_version_': 1620403309341835283}, 'prostate': {'id': '5613_prostate_PRJEB4337', 'gene': 5613, 'source_name': 'prostate', 'full_rpkm': 1.9352, 'exp_rpkm': 1.94, 'var': 0.421672, 'project_desc': 'PRJEB4337', '_version_': 1620403309341835284}, 'salivary gland': {'id': '5613_salivary gland_PRJEB4337', 'gene': 5613, 'source_name': 'salivary gland', 'full_rpkm': 1.06906, 'exp_rpkm': 1.07, 'var': 0.2523831, 'project_desc': 'PRJEB4337', '_version_': 1620403309341835285}, 'skin': {'id': '5613_skin_PRJEB4337', 'gene': 5613, 'source_name': 'skin', 'full_rpkm': 5.92819, 'exp_rpkm': 5.93, 'var': 4.49205, 'project_desc': 'PRJEB4337', '_version_': 1620403309342883840}, 'small intestine': {'id': '5613_small intestine_PRJEB4337', 'gene': 5613, 'source_name': 'small intestine', 'full_rpkm': 2.80388, 'exp_rpkm': 2.8, 'var': 0.618324, 'project_desc': 'PRJEB4337', '_version_': 1620403309342883841}, 'spleen': {'id': '5613_spleen_PRJEB4337', 'gene': 5613, 'source_name': 'spleen', 'full_rpkm': 7.0287, 'exp_rpkm': 7.03, 'var': 3.7221, 'project_desc': 'PRJEB4337', '_version_': 1620403309342883842}, 'stomach': {'id': '5613_stomach_PRJEB4337', 'gene': 5613, 'source_name': 'stomach', 'full_rpkm': 1.84125, 'exp_rpkm': 1.84, 'var': 0.0611346, 'project_desc': 'PRJEB4337', '_version_': 1620403309342883843}, 'testis': {'id': '5613_testis_PRJEB4337', 'gene': 5613, 'source_name': 'testis', 'full_rpkm': 5.39896, 'exp_rpkm': 5.4, 'var': 1.186563, 'project_desc': 'PRJEB4337', '_version_': 1620403309342883844}, 'thyroid': {'id': '5613_thyroid_PRJEB4337', 'gene': 5613, 'source_name': 'thyroid', 'full_rpkm': 22.9467, 'exp_rpkm': 22.9, 'var': 49.6716, 'project_desc': 'PRJEB4337', '_version_': 1620403309342883845}, 'urinary bladder': {'id': '5613_urinary bladder_PRJEB4337', 'gene': 5613, 'source_name': 'urinary bladder', 'full_rpkm': 3.04352, 'exp_rpkm': 3.04, 'var': 1.019288, 'project_desc': 'PRJEB4337', '_version_': 1620403309342883846}};
+
+tissues <- readLines("GenesCluster2.tissues")
+RPKM <- matrix(0,nrow = length(tissues), ncol = 1+27*2)
+for (tnum in 1:length(tissues)) {
+  tissue <- gsub("\\s*var tissues_data = \\{\\s*","",tissues[tnum])
+  tissue <- gsub("\\};","",tissue)
+  tissueVector <- unlist(strsplit(tissue, "\\},"))
+  for (j in 1:length(tissueVector)) {
+    x <- unlist(strsplit(gsub("\\S+ \\{","",tissueVector[j]), ", "))
+    source_name <- unlist(strsplit(tissueVector[j],"': \\{"))[1]
+    source_name <- gsub(" *'","",source_name)
+    geneID  <- as.numeric(gsub("\\D","",x[2]))
+    exp_rpkm <- as.numeric(gsub("\\S+: ", "", x[5]))
+    var_rpkm <- as.numeric(gsub("\\S+: ", "", x[6]))
+    cat(geneID,source_name,exp_rpkm,sqrt(var_rpkm),"\n")
+    RPKM[tnum, 1] <- geneID
+    RPKM[tnum, 2+2*(j-1)] <- exp_rpkm
+    RPKM[tnum, 3+2*(j-1)] <- sqrt(var_rpkm)
+  }
+}
+# genes 56, 223 returned empty arrays
+RPKM <- RPKM[-c(56,223),]
+rpkm <- RPKM[,seq(2,54,by=2)]
+plot(apply(rpkm,2,median))
+rpkmMin <- RPKM[,seq(2,54,by=2)] - RPKM[,seq(3,55,by=2)]
+plot(colMeans(rpkmMin))
+
+
+tissueNames <- rep("", 27)
+tissues <- readLines("GenesCluster6.tissues")
+RPKM6 <- matrix(0,nrow = length(tissues), ncol = 1+27*2)
+for (tnum in 1:length(tissues)) {
+  tissue <- gsub("\\s*var tissues_data = \\{\\s*","",tissues[tnum])
+  tissue <- gsub("\\};","",tissue)
+  tissueVector <- unlist(strsplit(tissue, "\\},"))
+  for (j in 1:length(tissueVector)) {
+    x <- unlist(strsplit(gsub("\\S+ \\{","",tissueVector[j]), ", "))
+    source_name <- unlist(strsplit(tissueVector[j],"': \\{"))[1]
+    source_name <- gsub(" *'","",source_name)
+    geneID  <- as.numeric(gsub("\\D","",x[2]))
+    exp_rpkm <- as.numeric(gsub("\\S+: ", "", x[5]))
+    var_rpkm <- as.numeric(gsub("\\S+: ", "", x[6]))
+    cat(geneID,source_name,exp_rpkm,sqrt(var_rpkm),"\n")
+    RPKM6[tnum, 1] <- geneID
+    RPKM6[tnum, 2+2*(j-1)] <- exp_rpkm
+    RPKM6[tnum, 3+2*(j-1)] <- sqrt(var_rpkm)
+    tissueNames[j] <- source_name
+  }
+}
+rpkm6 <- RPKM6[,seq(2,54,by=2)]
+plot(apply(rpkm6,2,median))
+rpkm6Min <- RPKM6[,seq(2,54,by=2)] - RPKM6[,seq(3,55,by=2)]
+plot(colMeans(rpkm6Min))
+
+for (j in 1:27) {
+  plot(log(1+RPKM6[,2*j]),ylim=c(0,10), main=tissueNames[j])
+  abline(h=0,col=2,lwd=2)
+  hist(log(1+RPKM6[,2*j]), xlim=c(0,10),breaks=20, main=tissueNames[j])
+}
+
+for (j in 1:27) {
+  plot(log(1+RPKM[,2*j]),ylim=c(0,10), main=tissueNames[j])
+  abline(h=0,col=2,lwd=2)
+  hist(log(1+RPKM[,2*j]), xlim=c(0,10),breaks=20, main=tissueNames[j])
+}

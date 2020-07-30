@@ -1,0 +1,9 @@
+sigResid <- sort(union(Sres$rt,Sres$lt))
+G <- Sres$G
+tmpmat <- Matrix(0,G, G)
+vec <- rep(0, choose(G,2))
+vec[sigResid] <- 1
+tmpmat[upper.tri(tmpmat)] = vec
+AdjMat <- tmpmat+t(tmpmat)
+AdjMat1 <- getNeighborhood(AdjMat, numSteps=1)
+image(AdjMat1$Mat)

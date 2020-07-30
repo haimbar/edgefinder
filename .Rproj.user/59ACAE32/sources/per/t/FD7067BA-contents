@@ -1,0 +1,15 @@
+
+update vignette
+  exportNodeInfo replace with graphComponenets
+  remove getNeighborhood
+  shortestPathDistance - show  example?
+
+github !!
+
+
+split large files
+cluster similarity ??
+Hausdorff bw clusters using shortestPathDistance
+   the greatest of all the distances from a point in one set to the closest
+   point in the other set.
+use plotly ?? pgf?

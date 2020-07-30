@@ -1,0 +1,162 @@
+---
+title: "The edgefinder package - examples"
+author: "Haim Bar"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{edgefinder}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+The edgefinder package is used to find edges in gene networks using on co-expression
+data. The input to the program is a normalized expression matrix, with genes (nodes)
+in the rows, and samples in the columns.
+The program calculates the pair-wise correlations, performs Fisher's Z 
+transformation, and fits the L2N model to the transformed data. L2N is a mixture
+model with three components: the uncorrelated pairs belong to the null component
+which is assumed to be normally distributed, and the correlated pairs belong to one
+of the two non-null components which are assumed to follow lognormal distributions.
+
+Typical datasets consist of hundreds, or thousands of genes, and hence a very
+large number of pairs. Therefore, edgefinder selects a subset of the pairs (the
+default number of pairs is 20,000), fits the L2N model to the subset, and calculates
+the component probabilities for *all* possible pairs.
+Using the posterior probabilities, edgefinder determines which pairs are
+highly correlated while controling the false discovery rate.
+Note that edgefinder makes no assumptions about the structure of the network.
+
+The edgefinder package depends on the 'Matrix' package, to allow for efficient
+storage and computation of large co-occurence matrices. For simulating datasets
+we used the 'huge' package, but it is not required when using edgefinder.
+
+# Real data examples
+
+We use a publiclly available dataset from 
+https://www.ncbi.nlm.nih.gov/sites/GDSbrowser?acc=GDS4430
+(Horev G, Ellegood J, Lerch JP, Son YE et al. Dosage-dependent phenotypes in models 
+of 16p11.2 lesions found in autism. Proc Natl Acad Sci U.S.A. 2011, Oct. 
+11;108(41):17076-81. PMID: 21969575).
+
+The dataset contains three groups: wild type (2 copies of 16p11.2),
+deletion (1 copy), and duplication (3 copies).
+We focus on a subset of 3,454, genes which were found to be differentially
+expressed when comparing the wild-type and duplication groups (using an 
+FDR threshold of 0.05.)
+We fit the
+L2N model to this set of genes in each group, and compare the properties
+of the two networks. First, we load the wild-type data (WT).
+WT is a matrix with 3454 rows (genes) and 15 columns (samples) from
+the wild-type group.
+
+
+
+```
+library("edgefinder")
+# Wild-type first:
+data(WT)
+WTres <- edgefinder(WT, ttl = "Wild Type")
+shortSummary(WTres)
+```
+
+The edgefinder function plots the fitted mixture distribution:
+
+```{r echo=FALSE, out.width='60%'}
+knitr::include_graphics('./WTfit.png')
+```
+
+The function shortSummary produces the following output:
+
+```
+No. nodes = 3,454 
+Max no. edges = 5,963,331 
+p1 = 0.0523 
+p2 = 0.00892 
+Est. Power = 0.25 
+Est. FDR = 0.0472 
+```
+
+Note that the estimated power and FDR are calculated based on the fitted L2N model.
+
+The plotDegCC function can be used to plot the degree of nodes versus the
+degree times the clustering coefficient of nodes.
+
+```
+plotDegCC(WTres)
+```
+
+```{r echo=FALSE, out.width='60%'}
+knitr::include_graphics('./WTdg.png')
+```
+
+The plotBitmapCC function is used to show the network as a 0/1 matrix, where a black
+dot corresponds to an edge in the graph. Setting orderByDegree=T is used to
+sort the nodes by clusters (by degree). When set to FALSE, the original order
+of the nodes as it appears in the gene expression file, is preserved.
+
+
+```
+WTres$orderByDegree=T
+plotBitmapCC(WTres)
+```
+
+```{r echo=FALSE, out.width='60%'}
+knitr::include_graphics('./WTbitmap.png')
+```
+
+We repeat the same process with the duplication group.
+DUP is a matrix with 3454 rows (genes) and 12 columns (samples).
+
+```
+data("DUP")
+Dres <- edgefinder(DUP, ttl = "Duplication")
+shortSummary(Dres)
+plotDegCC(Dres)
+Dres$orderByDegree=T
+plotBitmapCC(Dres)
+
+No. nodes = 3,454 
+Max no. edges = 5,963,331 
+p1 = 0.0642 
+p2 = 0.00402 
+Est. Power = 0.267 
+Est. FDR = 0.0488 
+```
+
+```{r echo=FALSE, out.width='60%'}
+knitr::include_graphics('./DUPfit.png')
+knitr::include_graphics('./DUPdg.png')
+knitr::include_graphics('./DUPbitmap.png')
+```
+
+
+# Simulated data
+
+The following examples shows a simulated dataset with a hub structure, consisting
+of 1000 nodes and 50 hubs. The bitmap plot shows the network that was created
+by edgefinder.
+
+```
+library("huge")
+N=200; D=1000
+set.seed(23197)
+L = huge.generator(n = N, d = D, graph = "hub", g=50, 
+                              v = 0.3, u = 0.1)
+x = mvrnorm(N, rep(0, D), L$sigma)
+Sres <- edgefinder(t(x), ttl = "Simulation")
+Sres$orderByDegree=F
+plotBitmapCC(Sres)
+```
+
+library("huge")
+
+```{r echo=FALSE, out.width='100%'}
+knitr::include_graphics('./SIMbitmap.png')
+```

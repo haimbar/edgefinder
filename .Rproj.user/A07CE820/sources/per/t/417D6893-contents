@@ -1,0 +1,428 @@
+
+#' Detect edges in co-expression datasete.
+#'
+#' Fit the L2N model to normalized correlation coefficients between pairs of genes. The mixture model has three component - the null component follows a normal distribution, and the two non-null components follow lognormal distributions. An edge is in the graph if the correlation between the two end-point genes is large enough and determined to be in one of the non-null components.
+#' @param Exprs A numeric matrix with normalized gene expression data. Rows
+#' correspond to genes, and columns correspond to samples.
+#' @param BHthr the Benjamini-Hochberg fasle discovery rate threshold to be
+#' used to determine which pairs are strongly correlated. Default=0.05.
+#' @param rndseed The random seed used to select a subset of the pairs.
+#' @param maxLen The maximum number of pairs that will be randomly selected
+#' to fit the L2N model. Default=20000.
+#' @param LOvals the maximum log-odds ratio to be used to be used to
+#' determine the cut-off points to declare which correlations are significant.
+#' The program will check which log-odds ratio (1,2,...,LOvals) results in
+#' FDR less than or equal to BHthr.
+#' Default=20.
+#' @param ttl Title for the fitted-model plot. Default=""
+#' @return A list with the following elements
+#' \itemize{
+#'  \item{G} {The number of genes}
+#' \item{p1} {The proportion of genes in the right mixture component (positively correlated.)}
+#' \item{p2} {The proportion of genes in the left mixture component (negtively correlated.)}
+#' \item{p0} {The proportion of genes in the null component (un-correlated.)}
+#' \item{m0, m1, m2, s0, s1, s2} {The location and scale parameters of the three mixture components.}
+#' \item {thrtable} {A table with 6 columns: posterior probability ratio (ppr) between the non-null components and the null component), the right component cutoff corresponding to the ppr, the left component cutoff, the estimated probability of Type-I errors, the estimated power, the estimated FDR.}
+#' \item {LogOddsRatio} {The log-odds ratio that yields FDR less than or equal to the desired level.}
+#' \item {rmse} {The root mean-squared error of the fitted model.}
+#' \item {rt, lt} {The significant edges (from the right, and left mixture component.)}
+#' }
+#' @export
+#' @examples
+#' \donttest{
+#'    data(WT)
+#'    WTres <- edgefinder(WT, ttl = "Wild Type")
+#' }
+
+edgefinder <- function(Exprs, BHthr = 0.05,
+                       rndseed=112211, maxLen=20000, LOvals=20, ttl="") {
+  corM <- cor(t(Exprs), use = "pairwise.complete.obs")
+  N <- ncol(Exprs)
+  y <- atanh(corM[upper.tri(corM)])
+  fix <- which(is.infinite(y))
+  if (length(fix) > 0)
+    y[fix] <- max(abs(y[-fix]))*(1 + runif(length(fix)))
+  set.seed(rndseed)
+  sset <- sample(1:length(y),size = min(maxLen,length(y)))
+  y0 <- y[sset]
+  fittedL2N <- EM(y0*sqrt(N-3), fixedNullVar = F)
+  rmseL2N <- GoodnessOfFit(fittedL2N)
+  plotMixture(fittedL2N,gof=rmseL2N,trim=0, ttl=ttl)
+  B <- posteriorDensityL2N(fittedL2N, y*sqrt(N-3))
+  p1L2N <- mean(fittedL2N$b1)
+  p2L2N <- mean(fittedL2N$b2)
+  p0L2N <- 1-(p1L2N+p2L2N)
+  m0L2N = fittedL2N$theta
+  m1L2N = fittedL2N$mu1
+  m2L2N = fittedL2N$mu2
+  s0L2N = fittedL2N$tau
+  s1L2N = fittedL2N$s1
+  s2L2N = fittedL2N$s2
+
+  ret = logoddsValues(fittedL2N$x,m0L2N,s0L2N,m1L2N,
+                      s1L2N,m2L2N,s2L2N,p1L2N,p2L2N,
+                      vals=1:LOvals)
+  if (length(which(ret[,6] < BHthr) > 0)) {
+    LogOddsRatio <- max(min(which(ret[,6] < BHthr)),2)
+  } else {
+    LogOddsRatio <- LOvals
+  }
+  RtBFL2N <- which(B[[2]]/B[[1]] > LogOddsRatio)
+  LtBFL2N <- which(B[[3]]/B[[1]] > LogOddsRatio)
+
+  list(G=nrow(Exprs), p1=p1L2N, p2=p2L2N, p0=p0L2N, m0=m0L2N, m1=m1L2N, m2=m2L2N,
+       s0=s0L2N, s1=s1L2N, s2=s2L2N, thrtable=ret, LogOddsRatio=LogOddsRatio,
+       rmse=rmseL2N, rt=RtBFL2N, lt=LtBFL2N)
+}
+
+#' Print a short summary of the fitted mixture model.
+#'
+#' Show the number of nodes, the number of possible edges, the proportion of possitively/negatively correlated pairs, the estimated power and false discovery rate.
+#' @param edgefinderobj The object (list) returned from the edgefinder function.
+#' @export
+#' @examples
+#' \donttest{
+#'    data(WT)
+#'    WTres <- edgefinder(WT, ttl = "Wild Type")
+#'    shortSummary(WTres)
+#' }
+shortSummary <- function(edgefinderobj) {
+  with(edgefinderobj,{
+    cat("No. nodes =", prettyNum(G,big.mark = ","),"\n")
+    cat("Max no. edges =", prettyNum(choose(G, 2),big.mark = ","),"\n")
+    cat("p1 =",format(p1,digits=3),"\n")
+    cat("p2 =",format(p2,digits=3),"\n")
+    cat("Est. Power =", format(thrtable[LogOddsRatio,5],digits=3),"\n")
+    cat("Est. FDR =", format(thrtable[LogOddsRatio,6],digits=3),"\n")
+  })
+}
+
+# The EM algorithm to fit the L2N model.
+#
+# Fit the L2N model to normalized correlation coefficients between pairs of genes. The mixture model has three component - the null component follows a normal distribution, and the two non-null components follow lognormal distributions. An edge is in the graph if the correlation between the two end-point genes is large enough and determined to be in one of the non-null components.
+# @param x A vector of normalized correlation coefficients
+# @param max.it The maximum number of EM algorithm iterations (default=1000)
+# @param tol The tolerance level to assess convergence of the EM algorithm (default=1e-12.)
+# @return A list of the parameter estimates for the L2N model.
+# @export
+EM <- function(x, max.it=1000, tol=1e-12, mixturemodel= "L2N",
+               fixedNullVar=FALSE) {
+  N   <- length(x)
+  err <- 1
+  # initialize the parameter values
+  adjustMean <- mean(x) # centering the data around the mean
+  x <- x - adjustMean
+  # The parameters of the null ditribution, N(theta,tau) :
+  theta <- mean(x)
+  tau   <- 1
+  # The location and scale parameters of the nonnull components:
+  mu    <- abs(quantile(x,c(0.05,.95)))
+  names(mu) <- c()
+  sig   <- c(1, 1)
+  # The initial probabilities of the three components:
+  p0 <- 0.98
+  p1 <- 0.01
+  p2 <- 0.01
+  # Set the initial component indicator variables:
+  b1 <- rep(0,N)
+  b2 <- rep(0,N)
+  m1 <- 0
+  m2 <- 0
+  ct <- 0
+  # Run the EM algorithm until the mixture fits the empirical
+  # density well (total squared errors < tol)
+  while (err > tol) {
+    adjustMean <- adjustMean + theta
+    x   <- x - theta # iteratively center the data, so that the mean of the
+    # null component ends up being 0
+    pos <- which(x > 0) # Fit the nonnull components according to the
+    neg <- which(x < 0) #      sign of x
+
+    d0 <- dnorm(x, theta, tau) # null component is normal
+    d1 <- dlnorm(x, mu[1], sig[1])
+    d2 <- dlnorm(-x, mu[2], sig[2])
+    wtsm <- p0*d0 + p1*d1 + p2*d2    # The density of the mixture
+    b1[-pos] <- 0
+    b2[-neg] <- 0
+    b1[pos] <- pmin(1,p1*d1[pos]/wtsm[pos])  # Posterior probabilities of the positive nonnull
+    b2[neg] <- pmin(1,p2*d2[neg]/wtsm[neg])  # Posterior probabilities of the negative nonnull
+    b0      <- 1 - (b1+b2)           # The posterior null probabilities
+    # Update the component weights:
+    p0 <- mean(b0)
+    p1 <- mean(b1)
+    p2 <- mean(b2)
+    # Update the null component parameters:
+    theta <- sum(b0*x)/sum(b0)
+    if (fixedNullVar)
+      tau <- 1
+    else
+      tau  <- sqrt(sum(b0*(x-theta)^2)/sum(b0))
+    d0    <- dnorm(x, theta, tau)
+    # Update the nonnull (nonnull) components parameters:
+    if (sum(b1[pos]) < 1e-2) {
+      mu[1]  <- 0
+      sig[1] <- 0
+      d1     <- rep(0, N)
+    } else {
+      mu[1]  <- sum(b1[pos]*(log(x[pos])))/sum(b1[pos])
+      sig[1] <- sqrt(sum(b1[pos]*(log(x[pos])-mu[1])^2)/sum(b1[pos]))
+      d1     <- dlnorm(x, mu[1], sig[1])
+    }
+
+    if (sum(b2[neg]) < 1e-2) {
+      mu[2]  <- 0
+      sig[2] <- 0
+      d2     <- rep(0, N)
+    } else {
+      mu[2]  <- sum(b2[neg]*(log(-x[neg])))/sum(b2[neg])
+      sig[2] <- sqrt(sum(b2[neg]*(log(-x[neg])-mu[2])^2)/sum(b2[neg]))
+      d2     <- dlnorm(-x, mu[2], sig[2])
+    }
+
+    # Check convergence
+    err <- sum((p0*d0 + p1*d1 + p2*d2 - wtsm)^2)
+    ct <- ct + 1
+    if(ct > max.it)
+      break
+  }
+  b1[-pos] <- 0
+  b2[-neg] <- 0
+  b1[pos] <- pmin(1,p1*d1[pos]/wtsm[pos])  # Posterior probabilities of the positive nonnull
+  b2[neg] <- pmin(1,p2*d2[neg]/wtsm[neg])  # Posterior probabilities of the negative nonnull
+  b0      <- 1 - (b1+b2)           # The posterior null probabilities
+  pvals <- 2*(1-pnorm(abs(x), mean=0, sd=tau))
+  bh <- p.adjust(pvals, method="BH")
+  #qvals <- qvalue(pvals)$qvalues
+  list(x=x, adjustMean=adjustMean,
+       theta=theta, tau=tau,
+       mu1=mu[1], s1=sig[1],
+       mu2=mu[2], s2=sig[2],
+       b0=b0, b1=b1, b2=b2,
+       p.val=pvals, bh=bh,
+       #q.val=qvals,
+       err=err, its=ct)
+}
+
+# Calculate the log-odds ratios to determine for each gene, in which
+# of the three components in the L2N model, it belongs
+logoddsValues <- function(y,theta,tau,mu1,s1,mu2,s2,p1,p2,
+                          mixturemodel="L2N",vals=1:10) {
+  ret = matrix(0,nrow=length(vals),ncol=6)
+  ret[,1] = vals
+  p0 = 1-p1-p2
+  xs <- seq(min(y),max(y),length=10000)
+  pxs <- seq(1e-6,max(y),length=10000)
+  nxs <- seq(min(y),-1e-6,length=10000)
+  i=0
+  for (val in vals) {
+    i = i + 1
+    if (p1 < 1/length(y)) {
+      ret[i,2] <- Inf
+    } else {
+      f <- function(x) { log((p1*dlnorm(x, mu1, s1))/
+                               (p0*dnorm(x,  theta, tau)))-log(val) }
+      rt <- try(uniroot(f,  lower = 1e-6, upper = max(y)), silent = T)
+      if (class(rt) == "try-error")
+        ret[i,2] = Inf
+      else
+        ret[i,2] = rt$root
+    }
+    if (p2 < 1/length(y)) {
+      ret[i,3] <- -Inf
+    } else {
+      f <- function(x) { log((p2*dlnorm(-x, mu2, s2))/
+                               (p0*dnorm(x,  theta, tau)))-log(val) }
+      rt <- try(uniroot(f,  lower = min(y), upper = -1e-6), silent = T)
+      if (class(rt) == "try-error")
+        ret[i,3] = -Inf
+      else
+        ret[i,3] = rt$root
+    }
+    # type I:
+    ret[i,4] = pnorm(ret[i,3], theta, tau) +
+      1 - pnorm(ret[i,2], theta, tau)
+    # Power:
+    ret[i,5] = (p1*(1-plnorm(ret[i,2], mu1, s1)) +
+                  p2*(1-plnorm(-ret[i,3], mu2, s2)))/(p1+p2)
+    # FDR:
+    ret[i,6] <- p0*ret[i,4]/(p0*ret[i,4]+ret[i,5]*(p1+p2))
+  }
+  colnames(ret) <- c("ppr","Right","Left","TypeI","Power","FDR")
+  ret
+}
+
+# calculate the posterior L2N mixture model density of x, given the parameter
+# estimates
+posteriorDensityL2N <- function(fit.em, x) {
+  p0 <- mean(fit.em$b0)
+  p1 <- mean(fit.em$b1)
+  p2 <- mean(fit.em$b2)
+  adjustMean <- fit.em$adjustMean + fit.em$theta
+  x   <- x - fit.em$adjustMean
+  pos <- which(x > 0) # Fit the nonnull components according to the
+  neg <- which(x < 0) #      sign of x
+  d0 <- dnorm(x, fit.em$theta, fit.em$tau) # null component is normal
+  d1 <- dlnorm(x, fit.em$mu1, fit.em$s1)
+  d2 <- dlnorm(-x, fit.em$mu2, fit.em$s2)
+  wtsm <- p0*d0 + p1*d1 + p2*d2
+  b1 <- rep(0, length(x))
+  b2 <- rep(0, length(x))
+  b1[pos] <- pmin(1,p1*d1[pos]/wtsm[pos])  # Posterior probabilities of the positive nonnull
+  b2[neg] <- pmin(1,p2*d2[neg]/wtsm[neg])  # Posterior probabilities of the negative nonnull
+  b0      <- 1 - (b1+b2)           # The posterior null probabilities
+  list(b0=b0,b1=b1,b2=b2)
+}
+
+# Return the estimated density function of the mixture
+mixtureDensityL2N <- function(fit.em, x) {
+  mean(fit.em$b0)*dnorm(x, fit.em$theta, fit.em$tau) +
+    mean(fit.em$b1)*dlnorm(x, fit.em$mu1, fit.em$s1) +
+    mean(fit.em$b2)*dlnorm(-x, fit.em$mu2, fit.em$s2)
+}
+
+# Calculate the root mean squared error of the fitted mixture
+GoodnessOfFit <- function(fit.em, mixturemodel="L2N") {
+  x <- sort(fit.em$x)
+  if(length(x) > 10000)
+    x <- x[seq(1,length(x), length=10000)]
+  diffs <- x[-1] - x[-length(x)]
+  dnsfn <- approxfun(density(x,bw="SJ"))
+  return(sqrt(sum((diffs* (dnsfn(x[-1])-mixtureDensityL2N(fit.em,x[-1])) ^2))))
+}
+
+# create clusters of nodes, based on similarity of their edges
+clustNode <- function(A) {
+  degs <- rowSums(A)
+  deg1copy <- degs
+  ord <- rev(order(degs))
+  while(max(deg1copy) >= 0) {
+    maxdeg <- which.max(deg1copy)
+    nbrs <- which(A[maxdeg,] == 1)
+    nbrs <- setdiff(nbrs, which(deg1copy < 0))
+    deg1copy[maxdeg] <- -length(which(deg1copy < 0)) -1
+    if (length(nbrs) == 0)
+      next
+    extdeg <- rep(0, length(nbrs))
+    for (i in 1:length(nbrs)) {
+      nbr <- nbrs[i]
+      extdeg[i] <- length(setdiff(which(A[nbr,] == 1), nbrs)) + # external links
+        length(setdiff(nbrs, which(A[nbr,] == 0)))  # missing internal links
+    }
+    deg1copy[nbrs[rev(order(extdeg[nbrs]))]] <- -length(which(deg1copy < 0)) - 1:length(nbrs)
+  }
+  deg1copy
+}
+
+# calculate the clustering coefficient of a node
+clusteringCoef <- function(A) {
+  rsum <- rowSums(A)
+  cc <- rep(0,nrow(A))
+  for (i in 1:nrow(A)) {
+    if (rsum[i] <= 1)
+      cc[i] <- 0
+    else {
+      nbrs <- which(A[i,] == 1)
+      At <- A[nbrs, nbrs]
+      cc[i] <- 0.5*sum(At)/choose(rsum[i],2)
+    }
+  }
+  cc
+}
+
+#' Plot the histogram of the data and the fitted mixture distribution.
+#'
+#' The function is called by the edgefinder function.
+#' @param fit.em The object (list) returned from the EM function with the parameter estimates for the L2N model.
+#' @param gof The root mean-squared error of the fitted model (to appear in the title of the plot).
+#' @param ttl The title of the plot (default="").
+#' @param trim The proportion of extreme values on both sides of the distribution to eliminate from the plot (default=0.01.) This can be useful if a small number of values are so extreme, that the plot shows mostly the tails and a spike in the middle.
+#' @export
+plotMixture <- function(fit.em, gof, ttl="", xlab="x", trim=0.01,
+                        mixturemodel="L2N") {
+  xlim <- quantile(fit.em$x, c(trim/2, 1-trim/2))
+  brks <- min(80,floor(length(fit.em$x)/100))
+  hist(fit.em$x, freq=FALSE, breaks=brks,
+       main=sprintf("%s\nrMSE %2.2f",ttl, gof),
+       xlim=xlim,xlab=xlab, border="white", col="wheat")
+  xs <- seq(min(fit.em$x), max(fit.em$x), length=1000)
+  p0 <- mean(fit.em$b0)
+  p1 <- mean(fit.em$b1)
+  p2 <- mean(fit.em$b2)
+  lines(xs,  p0*dnorm(xs,  fit.em$theta, fit.em$tau), col=2, lwd=2)
+  lines(xs,  p1*dlnorm(xs, fit.em$mu1,   fit.em$s1),  col=3, lwd=2)
+  lines(-xs, p2*dlnorm(xs, fit.em$mu2,   fit.em$s2),  col=3, lwd=2)
+  mxfit <- p0*dnorm(xs,fit.em$theta, fit.em$tau) +
+    p1*dlnorm(xs, fit.em$mu1, fit.em$s1) +
+    p2*dlnorm(-xs, fit.em$mu2, fit.em$s2)
+  lines(xs, mxfit, lwd=3, col=4, lty=2)
+}
+
+#' Plot the degree of nodes versus the degree times the clustering coefficients.
+#'
+#' The x-axis represents the number of neighbors of each node, and the y-axis represents the proportion of neighbors which are connected to each other.
+#' @param edgefinderobj The object (list) returned by edgefinder.
+#' @export
+#' @examples
+#' \donttest{
+#'    data(WT)
+#'    WTres <- edgefinder(WT, ttl = "Wild Type")
+#'    plotDegCC(WTres)
+#' }
+
+plotDegCC <- function(edgefinderobj) {
+    sigW <- sort(union(edgefinderobj$rt,edgefinderobj$lt))
+    G <- edgefinderobj$G
+    tmpmat <- Matrix(0,G, G)
+    vec <- rep(0, choose(G,2))
+    vec[sigW] <- 1
+    tmpmat[upper.tri(tmpmat)] = vec
+    A0 <- tmpmat+t.data.frame(tmpmat)
+    cc0 <- clusteringCoef(as.matrix(A0))
+    deg0 <- rowSums(as.matrix(A0))
+    lm0 <- lm(sqrt(deg0*cc0) ~ sqrt(deg0))
+    M <- max(deg0)
+    plot(deg0, deg0*cc0,axes=F,xlim=c(0,M),
+         ylim=c(0,M),main="",
+         xlab=bquote("degree"),ylab=bquote("CC*degree"),
+         col="thistle",pch=24,cex=0.5); axis(1); axis(2)
+    grid(); abline(0,1,col="seagreen1", lwd=2)
+    sq <- seq(0,M,length=length(deg0))
+    newdat = data.frame(deg0 = sq)
+    pred = predict.lm(lm0, newdata=newdat)
+    lines(sq, pred^2, col="orange",lwd=3,lty=2)
+}
+
+#' Edge-indicator bitmap plot.
+#'
+#' Plot a bitmap in which a black dot corresponds to a pair of highly correlated genes (an edge in the graph).
+#' The default is to show the nodes according to their order in the input.
+#' By setting orderByDegree=T as below, it is possible to change the order and cluster them, and show them in increasing degree order (from left to right.)
+#' @param edgefinderobj The object (list) returned by edgefinder.
+#' @export
+#' @examples
+#' \donttest{
+#'    data(WT)
+#'    WTres <- edgefinder(WT, ttl = "Wild Type")
+#'    plotBitmapCC(WTres)
+#'    WTres$orderByDegree=T
+#'    plotBitmapCC(WTres)
+#' }
+plotBitmapCC <- function(edgefinderobj) {
+  with(edgefinderobj,{
+    sigW <- sort(union(rt,lt))
+    tmpmat <- Matrix(0,G, G)
+    vec <- rep(0, choose(G,2))
+    vec[sigW] <- 1
+    tmpmat[upper.tri(tmpmat)] = vec
+    A0 <- tmpmat+t.data.frame(tmpmat)
+    deg0copy <- clustNode(as.matrix(A0))
+    if ("orderByDegree" %in% ls()) {
+      if (orderByDegree)
+        image(A0[order(deg0copy), order(deg0copy)])
+      else
+        image(A0)
+    } else {
+      image(A0)
+    }
+  })
+}

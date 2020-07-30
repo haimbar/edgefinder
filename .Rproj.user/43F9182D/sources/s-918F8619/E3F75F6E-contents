@@ -1,0 +1,14 @@
+Package: edgefinder
+Type: Package
+Title: Detect Edges in Sparse Co-expression Graphs
+Version: 0.1.5
+Author: Haim Bar and Seojin Bang
+Maintainer: Haim Bar <haim.bar@uconn.edu>
+Description: Finding edges in co-expression graphs, based on "A Mixture Model to Detect Edges in Sparse Co-expression Graphs", Haim Bar and Seojin Bang. See more details in the vignettes.
+License: GPL-2
+Encoding: UTF-8
+LazyData: true
+RoxygenNote: 7.1.1
+Suggests: knitr, rmarkdown
+VignetteBuilder: knitr
+Depends: R (>= 3.4.0), Matrix
