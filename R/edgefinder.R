@@ -586,6 +586,7 @@ plotBitmapCC <- function(AdjMat, clusterInfo=NULL, orderByCluster=FALSE, showMin
 #' @param AdjMat An adjacency Matrix (0/1).
 #' @param clustNo The chosen cluster.
 #' @param clusterInfo Obtained from graphComponents.
+#' @param labels If set to TRUE, show node names (default=FALSE).
 #' @export
 #' @examples
 #' \donttest{
@@ -594,7 +595,7 @@ plotBitmapCC <- function(AdjMat, clusterInfo=NULL, orderByCluster=FALSE, showMin
 #'    WTComp <- graphComponents(WTres$AdjMat)
 #'    plotCluster(WTres$AdjMat, 5, WTComp)
 #' }
-plotCluster <- function(AdjMat, clustNo, clusterInfo=NULL) {
+plotCluster <- function(AdjMat, clustNo, clusterInfo=NULL, labels=FALSE) {
   if(is.null(clusterInfo))
     clusterInfo <- graphComponents(AdjMat)
   ids <- which(clusterInfo$clustNo == clustNo)
@@ -613,16 +614,20 @@ plotCluster <- function(AdjMat, clustNo, clusterInfo=NULL) {
     opacity <- opacity/max(opacity)
     plot(rads*cos(thetas), rads*sin(thetas),cex=sizes*3, pch=19,axes=F,
          xlab="",ylab="",col=rgb(red = 0, green = 0, blue = 1, alpha = opacity))
-    for (i in 1:(ncol(tmpA)-1)) {
-      nbrs <- which(tmpA[i,i:ncol(tmpA)] == 1)
-      for (j in i:ncol(tmpA)) {
-        lines(c(rads[i]*cos(thetas[i]), rads[j]*cos(thetas[j])),
-              c(rads[i]*sin(thetas[i]), rads[j]*sin(thetas[j])),
-              col="grey88", lwd=0.5)
+    for (i in 1:ncol(tmpA)) {
+      nbrs <- setdiff(which(tmpA[i,] == 1), 1:i)
+      if(length(nbrs) > 0) {
+        for (j in nbrs) {
+          lines(c(rads[i]*cos(thetas[i]), rads[j]*cos(thetas[j])),
+                c(rads[i]*sin(thetas[i]), rads[j]*sin(thetas[j])),
+                col="grey88", lwd=0.5)
+        }
       }
     }
     points(rads*cos(thetas), rads*sin(thetas),cex=sizes*3, pch=19,
            col=rgb(red = 0, green = 0, blue = 1, alpha = opacity))
+    if (labels)
+      text(rads*cos(thetas), rads*sin(thetas), tmpclusterInfo$labels, pos=3)
     ctr <- which(tmpclusterInfo$iscenter==1)
     points(rads[ctr]*cos(thetas[ctr]), rads[ctr]*sin(thetas[ctr]),pch=21,
            cex=sizes[ctr]*3, col="black",lwd=2)
