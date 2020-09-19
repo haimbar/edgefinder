@@ -39,6 +39,7 @@
 #' @import stats
 #' @importFrom Matrix Matrix
 #' @importFrom grDevices rgb
+#' @importFrom grDevices col2rgb
 #' @examples
 #' \donttest{
 #'    data(WT)
@@ -257,7 +258,7 @@ logoddsValues <- function(y,theta,tau,mu1,s1,mu2,s2,p1,p2,vals=1:30) {
       1 - pnorm(ret[i,2], theta, tau)
     # "Power":
     ret[i,5] <- (p1*(1-plnorm(ret[i,2], mu1, s1)) +
-                  p2*(1-plnorm(-ret[i,3], mu2, s2)))/(p1+p2)
+                   p2*(1-plnorm(-ret[i,3], mu2, s2)))/(p1+p2)
     # FDR:
     ret[i,6] <- p0*ret[i,4]/(p0*ret[i,4]+ret[i,5]*(p1+p2))
   }
@@ -310,7 +311,7 @@ GoodnessOfFit <- function(fit.em, mixturemodel="L2N") {
 
 #' Find clusters, and return node characteristics.
 #'
-#' Take an adjacency Matrix as input and find clusters. For each node, find the degree and clustering coefficient (CC). Then, calculate a centrality measure (type\*CC+1)\*deg. For type=0, it's just the degree. Note that setting type=1 we assign a higher value to nodes that not only have many neighbors, but the neighbors are highly interconnected. For example, suppose we have two components with k nodes, one has a star shape, and the other is a complete graph. With type=0 both graphs will get the same value, but with type=1 the complete graph will be picked by the algorithm first.
+#' Take an adjacency Matrix as input and find clusters. For each node, find the degree and clustering coefficient (CC). Then, calculate a centrality measure (type\*CC+1)\*deg. For type=0, it's just the degree. Note that setting type=1 we assign a higher value to nodes that not only have many neighbors, but the neighbors are highly interconnected. For example, suppose we have two components with k nodes, one has a star shape, and the other is a complete graph. With type=0 both graphs will get the same value, but with type=1 the complete graph will be picked by the algorithm first. Setting type to a negative value gives CC\*deg as the centrality measure.
 #' @param A An adjacency Matrix(0/1).
 #' @param minCtr The minimum centrality value to be considered for a cluster center (default=5).
 #' @param type Determines how the centrality measure is computed.
@@ -319,7 +320,7 @@ GoodnessOfFit <- function(fit.em, mixturemodel="L2N") {
 #'  \item{labels} {Node label (e.g. gene names).}
 #' \item{degree} {Node degree.}
 #' \item{cc} {Node clustering coefficient.}
-#' \item{ctr} {Node centrality measure: (type\*CC+1)\*deg.}
+#' \item{ctr} {Node centrality measure: (type\*CC+1)\*deg, or CC\*deg if type is negative.}
 #' \item{clustNo} {Cluster number.}
 #' \item {iscenter} {1 for the node was chosen as the cluster's center, 0 otherwise.}
 #' \item {intEdges} {Number of edges from the node to nodes in the same cluster.}
@@ -344,6 +345,8 @@ graphComponents <- function(A, minCtr=5, type=1) {
   deg <- Matrix::rowSums(A)
   CC <- clusteringCoef(A)
   ctrs <- (type*CC+1)*deg
+  if (type < 0)
+    ctrs <- CC*deg
   clustersInfo <- data.frame(labels=labels, degree=deg, cc=CC, ctr=ctrs,
                              clustNo=rep(0,Vn), iscenter=rep(0,Vn),
                              intEdges=rep(0,Vn), extEdges=rep(0,Vn),
@@ -362,7 +365,11 @@ graphComponents <- function(A, minCtr=5, type=1) {
         clustersInfo$iscenter[ctrnode] <- 1
         clustersInfo$clustNo[union(ctrnode,nbrs)] <- clustNo
         clustersInfo$intEdges[nbrs] <- Matrix::rowSums(A[nbrs,nbrs])
-        clustersInfo$extEdges[nbrs] <- Matrix::rowSums(A[nbrs,-nbrs])
+        if (length(nbrs) < ncol(A)) {
+          clustersInfo$extEdges[nbrs] <- Matrix::rowSums(A[nbrs,-nbrs])
+        } else {
+          clustersInfo$extEdges[nbrs] <- 0
+        }
         for (i in 1:length(nbrs)) {
           clustersInfo$distCenter[nbrs[i]] <- mean(xor(A[ctrnode,], A[nbrs[i],]))
         }
@@ -400,11 +407,13 @@ summarizeClusters <- function(clustersInfo) {
   cat("Num of unclustered nodes:", length(which(clustersInfo$clustNo == 0)),"\n")
   percentInCluster <- clustersInfo$intEdges/clustersInfo$degree
   percentInCluster[which(clustersInfo$degree == 0)] <- 0
+  if (max(clustersInfo$clustNo) == 0)
+    return(NULL)
   tab <- matrix(0,nrow=max(clustersInfo$clustNo),ncol=12)
   for (cnum in 1:max(clustersInfo$clustNo)) {
     tmpclusterInfo <- clustersInfo[which(clustersInfo$clustNo == cnum),]
     tab[cnum,] <- c(cnum,nrow(tmpclusterInfo), fivenum(tmpclusterInfo$degree),
-        fivenum(percentInCluster[which(clustersInfo$clustNo == cnum)]))
+                    fivenum(percentInCluster[which(clustersInfo$clustNo == cnum)]))
   }
   colnames(tab) <- c("Cluster","Nodes","degreeMin","degreeQ25","degreeMedian",
                      "degreeQ75","degreeMax","pctInClstMin","pctInClstQ25",
@@ -434,7 +443,9 @@ collapsedGraph <- function(A, clustersInfo) {
   collA <- Matrix::Matrix(0, ncol=collDim, nrow=collDim)
   inCluster <- which(clustersInfo$clustNo > 0)
   notInCluster <- which(clustersInfo$clustNo == 0)
-  collA[1:length(notInCluster), 1:length(notInCluster)] <- A[notInCluster, notInCluster]>0
+  if (length(notInCluster) > 0) {
+    collA[1:length(notInCluster), 1:length(notInCluster)] <- A[notInCluster, notInCluster]>0
+  }
   if (length(rownames(A)) != nrow(A)) {
     rownames(A) <- 1:nrow(A)
   }
@@ -442,8 +453,11 @@ collapsedGraph <- function(A, clustersInfo) {
                        paste0("CLS",1:max(clustersInfo$clustNo)))
   for (i in 1:max(clustersInfo$clustNo)) {
     Ci <- which(clustersInfo$clustNo == i)
-    collA[i+length(notInCluster),1:length(notInCluster)] <-
-      Matrix::rowSums(A[notInCluster,which(clustersInfo$clustNo==i)])
+    if (length(notInCluster) > 0) {
+      Atmp <- matrix(A[notInCluster,which(clustersInfo$clustNo==i)],
+                     nrow=length(notInCluster), ncol=length(which(clustersInfo$clustNo==i)))
+      collA[i+length(notInCluster),1:length(notInCluster)] <- Matrix::rowSums(Atmp)
+    }
     if (i < max(clustersInfo$clustNo)) {
       for (j in (i+1):max(clustersInfo$clustNo)) {
         Cj <- which(clustersInfo$clustNo == j)
@@ -453,6 +467,7 @@ collapsedGraph <- function(A, clustersInfo) {
   }
   collA + Matrix::t(collA)
 }
+
 
 
 #' Calculate the clustering coefficient of each node.
@@ -587,6 +602,8 @@ plotBitmapCC <- function(AdjMat, clusterInfo=NULL, orderByCluster=FALSE, showMin
 #' @param clustNo The chosen cluster.
 #' @param clusterInfo Obtained from graphComponents.
 #' @param labels If set to TRUE, show node names (default=FALSE).
+#' @param nodecol The color(s) of the nodes. Can be a single value or a vector of length equal to the number of rows in AdjMat
+#' @param labelsize Text size of node labels.
 #' @export
 #' @examples
 #' \donttest{
@@ -595,9 +612,11 @@ plotBitmapCC <- function(AdjMat, clusterInfo=NULL, orderByCluster=FALSE, showMin
 #'    WTComp <- graphComponents(WTres$AdjMat)
 #'    plotCluster(WTres$AdjMat, 5, WTComp)
 #' }
-plotCluster <- function(AdjMat, clustNo, clusterInfo=NULL, labels=FALSE) {
+plotCluster <- function(AdjMat, clustNo, clusterInfo=NULL, labels=FALSE, nodecol="blue",labelsize=1) {
   if(is.null(clusterInfo))
     clusterInfo <- graphComponents(AdjMat)
+  if(length(nodecol) < nrow(AdjMat))
+    nodecol <- rep(nodecol[1],length=nrow(AdjMat))
   ids <- which(clusterInfo$clustNo == clustNo)
   if (length(ids) > 0) {
     tmpA <- AdjMat[ids,ids]
@@ -612,8 +631,9 @@ plotCluster <- function(AdjMat, clustNo, clusterInfo=NULL, labels=FALSE) {
     sizes <- pmax(0.3,tmpclusterInfo$degree/max(tmpclusterInfo$degree))
     opacity <- 0.25+tmpclusterInfo$intEdges/tmpclusterInfo$degree
     opacity <- opacity/max(opacity)
+    nodecol <- rgb(t(col2rgb(nodecol)/255),alpha=opacity)[ids]
     plot(rads*cos(thetas), rads*sin(thetas),cex=sizes*3, pch=19,axes=F,
-         xlab="",ylab="",col=rgb(red = 0, green = 0, blue = 1, alpha = opacity))
+         xlab="",ylab="",col=nodecol)
     for (i in 1:ncol(tmpA)) {
       nbrs <- setdiff(which(tmpA[i,] == 1), 1:i)
       if(length(nbrs) > 0) {
@@ -624,10 +644,9 @@ plotCluster <- function(AdjMat, clustNo, clusterInfo=NULL, labels=FALSE) {
         }
       }
     }
-    points(rads*cos(thetas), rads*sin(thetas),cex=sizes*3, pch=19,
-           col=rgb(red = 0, green = 0, blue = 1, alpha = opacity))
+    points(rads*cos(thetas), rads*sin(thetas),cex=sizes*3, pch=19, col=nodecol)
     if (labels)
-      text(rads*cos(thetas), rads*sin(thetas), tmpclusterInfo$labels, pos=3)
+      text(rads*cos(thetas), rads*sin(thetas), tmpclusterInfo$labels, pos=3, cex=labelsize)
     ctr <- which(tmpclusterInfo$iscenter==1)
     points(rads[ctr]*cos(thetas[ctr]), rads[ctr]*sin(thetas[ctr]),pch=21,
            cex=sizes[ctr]*3, col="black",lwd=2)

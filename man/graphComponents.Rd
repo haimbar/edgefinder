@@ -19,7 +19,7 @@ A data frame with the following columns
  \item{labels} {Node label (e.g. gene names).}
 \item{degree} {Node degree.}
 \item{cc} {Node clustering coefficient.}
-\item{ctr} {Node centrality measure: (type\*CC+1)\*deg.}
+\item{ctr} {Node centrality measure: (type\*CC+1)\*deg, or CC\*deg if type is negative.}
 \item{clustNo} {Cluster number.}
 \item {iscenter} {1 for the node was chosen as the cluster's center, 0 otherwise.}
 \item {intEdges} {Number of edges from the node to nodes in the same cluster.}
@@ -28,7 +28,7 @@ A data frame with the following columns
 }
 }
 \description{
-Take an adjacency Matrix as input and find clusters. For each node, find the degree and clustering coefficient (CC). Then, calculate a centrality measure (type\*CC+1)\*deg. For type=0, it's just the degree. Note that setting type=1 we assign a higher value to nodes that not only have many neighbors, but the neighbors are highly interconnected. For example, suppose we have two components with k nodes, one has a star shape, and the other is a complete graph. With type=0 both graphs will get the same value, but with type=1 the complete graph will be picked by the algorithm first.
+Take an adjacency Matrix as input and find clusters. For each node, find the degree and clustering coefficient (CC). Then, calculate a centrality measure (type\*CC+1)\*deg. For type=0, it's just the degree. Note that setting type=1 we assign a higher value to nodes that not only have many neighbors, but the neighbors are highly interconnected. For example, suppose we have two components with k nodes, one has a star shape, and the other is a complete graph. With type=0 both graphs will get the same value, but with type=1 the complete graph will be picked by the algorithm first. Setting type to a negative value gives CC\*deg as the centrality measure.
 }
 \examples{
 \donttest{

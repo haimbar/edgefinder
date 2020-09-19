@@ -4,7 +4,14 @@
 \alias{plotCluster}
 \title{Plot cluster network}
 \usage{
-plotCluster(AdjMat, clustNo, clusterInfo = NULL, labels = FALSE)
+plotCluster(
+  AdjMat,
+  clustNo,
+  clusterInfo = NULL,
+  labels = FALSE,
+  nodecol = "blue",
+  labelsize = 1
+)
 }
 \arguments{
 \item{AdjMat}{An adjacency Matrix (0/1).}
@@ -14,6 +21,10 @@ plotCluster(AdjMat, clustNo, clusterInfo = NULL, labels = FALSE)
 \item{clusterInfo}{Obtained from graphComponents.}
 
 \item{labels}{If set to TRUE, show node names (default=FALSE).}
+
+\item{nodecol}{The color(s) of the nodes. Can be a single value or a vector of length equal to the number of rows in AdjMat}
+
+\item{labelsize}{Text size of node labels.}
 }
 \description{
 Plot a cluster network with all the nodes and edges - the central node is marked by a black circle. The radius of each point corresponds to its degree. The opacity corresponds to the percentage of edges from the node that is in the cluster (the darker it is, the larger the percentage of edges is within the cluster.) The distance from the center corresponds to the relative dissimilarity with the central node. This is computed as the number of neighbors the node and the central node do not have in common.
