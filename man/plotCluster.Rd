@@ -10,7 +10,10 @@ plotCluster(
   clusterInfo = NULL,
   labels = FALSE,
   nodecol = "blue",
-  labelsize = 1
+  labelsize = 1,
+  figtitle = NULL,
+  negcor = NULL,
+  edgecols = "grey88"
 )
 }
 \arguments{
@@ -25,6 +28,12 @@ plotCluster(
 \item{nodecol}{The color(s) of the nodes. Can be a single value or a vector of length equal to the number of rows in AdjMat}
 
 \item{labelsize}{Text size of node labels.}
+
+\item{figtitle}{The title of the plot (default=NULL).}
+
+\item{negcor}{The pairs which are negatively correlated, to be drawn as red edges (default=NULL). If set to null, all edges will have the same color.}
+
+\item{edgecols}{The colors to be used for edges. Default="grey88". If one value is given, all edges will be drawn using this color. If negcor is used to specify which edges are negatively correlated and edgecol contains two valid colors, the first is used for positive correlations, and the second for negative ones.}
 }
 \description{
 Plot a cluster network with all the nodes and edges - the central node is marked by a black circle. The radius of each point corresponds to its degree. The opacity corresponds to the percentage of edges from the node that is in the cluster (the darker it is, the larger the percentage of edges is within the cluster.) The distance from the center corresponds to the relative dissimilarity with the central node. This is computed as the number of neighbors the node and the central node do not have in common.
@@ -35,5 +44,6 @@ Plot a cluster network with all the nodes and edges - the central node is marked
    WTres <- edgefinder(WT, ttl = "Wild Type")
    WTComp <- graphComponents(WTres$AdjMat)
    plotCluster(WTres$AdjMat, 5, WTComp)
+   # plotCluster(WTres$AdjMat, 5, WTComp, negcor = WTres$lt, edgecols = c("grey88","orange"))
 }
 }

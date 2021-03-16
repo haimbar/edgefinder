@@ -40,6 +40,7 @@
 #' @importFrom Matrix Matrix
 #' @importFrom grDevices rgb
 #' @importFrom grDevices col2rgb
+#' @importFrom grDevices colours
 #' @examples
 #' \donttest{
 #'    data(WT)
@@ -604,6 +605,9 @@ plotBitmapCC <- function(AdjMat, clusterInfo=NULL, orderByCluster=FALSE, showMin
 #' @param labels If set to TRUE, show node names (default=FALSE).
 #' @param nodecol The color(s) of the nodes. Can be a single value or a vector of length equal to the number of rows in AdjMat
 #' @param labelsize Text size of node labels.
+#' @param figtitle The title of the plot (default=NULL).
+#' @param negcor The pairs which are negatively correlated, to be drawn as red edges (default=NULL). If set to null, all edges will have the same color.
+#' @param edgecols The colors to be used for edges. Default="grey88". If one value is given, all edges will be drawn using this color. If negcor is used to specify which edges are negatively correlated and edgecol contains two valid colors, the first is used for positive correlations, and the second for negative ones.
 #' @export
 #' @examples
 #' \donttest{
@@ -611,12 +615,21 @@ plotBitmapCC <- function(AdjMat, clusterInfo=NULL, orderByCluster=FALSE, showMin
 #'    WTres <- edgefinder(WT, ttl = "Wild Type")
 #'    WTComp <- graphComponents(WTres$AdjMat)
 #'    plotCluster(WTres$AdjMat, 5, WTComp)
+#'    # plotCluster(WTres$AdjMat, 5, WTComp, negcor = WTres$lt, edgecols = c("grey88","orange"))
 #' }
-plotCluster <- function(AdjMat, clustNo, clusterInfo=NULL, labels=FALSE, nodecol="blue",labelsize=1) {
+plotCluster <- function(AdjMat, clustNo, clusterInfo=NULL, labels=FALSE, nodecol="blue", labelsize=1, figtitle=NULL, negcor=NULL, edgecols="grey88") {
   if(is.null(clusterInfo))
     clusterInfo <- graphComponents(AdjMat)
   if(length(nodecol) < nrow(AdjMat))
     nodecol <- rep(nodecol[1],length=nrow(AdjMat))
+  if (length(negcor) > 0) {
+    tmpmat <- Matrix::Matrix(0,nrow(AdjMat), ncol(AdjMat))
+    vec <- rep(0,choose(nrow(AdjMat), 2))
+    vec[negcor] <- -2
+    tmpmat[upper.tri(tmpmat)] <- vec
+    AdjMat <- AdjMat + (tmpmat+Matrix::t(tmpmat))
+  }
+
   ids <- which(clusterInfo$clustNo == clustNo)
   if (length(ids) > 0) {
     tmpA <- AdjMat[ids,ids]
@@ -633,14 +646,19 @@ plotCluster <- function(AdjMat, clustNo, clusterInfo=NULL, labels=FALSE, nodecol
     opacity <- opacity/max(opacity)
     nodecol <- rgb(t(col2rgb(nodecol)/255),alpha=opacity)[ids]
     plot(rads*cos(thetas), rads*sin(thetas),cex=sizes*3, pch=19,axes=F,
-         xlab="",ylab="",col=nodecol)
+         xlab="",ylab="",col=nodecol, main=figtitle)
     for (i in 1:ncol(tmpA)) {
-      nbrs <- setdiff(which(tmpA[i,] == 1), 1:i)
+      nbrs <- setdiff(which(abs(tmpA[i,]) == 1), 1:i)
       if(length(nbrs) > 0) {
+        edgecol <- rep(edgecols[1], ncol(tmpA))
+        edgecol[which(tmpA[i,nbrs] == -1)] <- "deepskyblue4"
+        if (edgecols[2] %in% colours()) {
+          edgecol[which(tmpA[i,nbrs] == -1)] <- edgecols[2]
+        }
         for (j in nbrs) {
           lines(c(rads[i]*cos(thetas[i]), rads[j]*cos(thetas[j])),
                 c(rads[i]*sin(thetas[i]), rads[j]*sin(thetas[j])),
-                col="grey88", lwd=0.5)
+                col=edgecol[j], lwd=0.5)
         }
       }
     }
