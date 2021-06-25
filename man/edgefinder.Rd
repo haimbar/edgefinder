@@ -11,7 +11,9 @@ edgefinder(
   maxLen = 20000,
   LOvals = 30,
   ttl = "",
-  trim = 0
+  trim = 0,
+  verbose = FALSE,
+  plot.it = FALSE
 )
 }
 \arguments{
@@ -35,6 +37,10 @@ FDR less than or equal to the user-specified BHthr. Default=30.}
 
 \item{trim}{Fraction of extreme values to exclude from the fitted-model
 plot. Default=0 (show all the data).}
+
+\item{verbose}{Whether to show progress message to the user. Default=FALSE.}
+
+\item{plot.it}{Whether to show the fitted mixture plot to the user. Default=FALSE.}
 }
 \value{
 A list with the following elements

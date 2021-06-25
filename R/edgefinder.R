@@ -21,6 +21,8 @@
 #' @param ttl Title for the fitted-model plot. Default=""
 #' @param trim Fraction of extreme values to exclude from the fitted-model
 #' plot. Default=0 (show all the data).
+#' @param verbose Whether to show progress message to the user. Default=FALSE.
+#' @param plot.it Whether to show the fitted mixture plot to the user. Default=FALSE.
 #' @return A list with the following elements
 #' \itemize{
 #' \item{G} {The total number of genes.}
@@ -47,7 +49,8 @@
 #'    WTres <- edgefinder(WT, ttl = "Wild Type")
 #' }
 edgefinder <- function(Exprs, BHthr = 0.01, rndseed=112211,
-                       maxLen=20000, LOvals=30, ttl="",trim=0) {
+                       maxLen=20000, LOvals=30, ttl="",trim=0,
+                       verbose=FALSE, plot.it=FALSE) {
   corM <- cor(t(Exprs), use = "pairwise.complete.obs")
   N <- ncol(Exprs)
   y <- atanh(corM[upper.tri(corM)])
@@ -59,8 +62,10 @@ edgefinder <- function(Exprs, BHthr = 0.01, rndseed=112211,
   y0 <- y[sset]
   fittedL2N <- EM(y0*sqrt(N-3))
   rmseL2N <- GoodnessOfFit(fittedL2N)
-  plotMixture(fittedL2N,gof=rmseL2N,trim=trim, ttl=ttl)
-  cat("Calculating the posterior density...\n")
+  if (plot.it)
+    plotMixture(fittedL2N,gof=rmseL2N,trim=trim, ttl=ttl)
+  if (verbose)
+    cat("Calculating the posterior density...\n")
   B <- posteriorDensityL2N(fittedL2N, y*sqrt(N-3))
   p1L2N <- mean(fittedL2N$b1)
   p2L2N <- mean(fittedL2N$b2)
@@ -72,7 +77,8 @@ edgefinder <- function(Exprs, BHthr = 0.01, rndseed=112211,
   s1L2N <- fittedL2N$s1
   s2L2N <- fittedL2N$s2
 
-  cat("Calculating the log-odds...\n")
+  if (verbose)
+    cat("Calculating the log-odds...\n")
   ret <- logoddsValues(fittedL2N$x,m0L2N,s0L2N,m1L2N,s1L2N,
                        m2L2N,s2L2N,p1L2N,p2L2N,vals=1:LOvals)
   if (length(which(ret[,6] < BHthr) > 0)) {
@@ -83,7 +89,8 @@ edgefinder <- function(Exprs, BHthr = 0.01, rndseed=112211,
   RtBFL2N <- which(B[[2]]/B[[1]] > LogOddsRatio)
   LtBFL2N <- which(B[[3]]/B[[1]] > LogOddsRatio)
 
-  cat("Calculating the adjacency matrix...\n")
+  if (verbose)
+    cat("Calculating the adjacency matrix...\n")
   G <- nrow(Exprs)
   sigW <- sort(union(RtBFL2N,LtBFL2N))
   tmpmat <- Matrix::Matrix(0,G, G)
